@@ -1,0 +1,161 @@
+// CORREÇÃO: Fechar o parêntese da tabela movimento
+    db.run(`
+    CREATE TABLE IF NOT EXISTS movimento (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        codigo VARCHAR(10) NOT NULL,
+        horarioE VARCHAR(100) NOT NULL,
+        horarioS VARCHAR(100),
+        data DATE DEFAULT CURRENT_DATE
+    )
+    `);
+
+
+
+// ==============================================
+// ROTAS PARA MOVIMENTO DO MÊS
+// ==============================================
+
+// Rota para buscar movimentos mensais de um cliente
+app.get("/movimento/mes", (req, res) => {
+    const { codigo, mes, ano } = req.query;
+
+    if (!codigo || !mes || !ano) {
+        return res.status(400).json({ message: "Código, mês e ano são obrigatórios." });
+    }
+
+    // Construir a data inicial e final do mês
+    const dataInicio = `${ano}-${mes.padStart(2, '0')}-01`;
+    const ultimoDia = new Date(ano, mes, 0).getDate();
+    const dataFim = `${ano}-${mes.padStart(2, '0')}-${ultimoDia}`;
+
+    const query = `
+        SELECT * FROM movimento 
+        WHERE codigo = ? 
+        AND date(data) BETWEEN ? AND ?
+        ORDER BY data, horarioE
+    `;
+
+    db.all(query, [codigo, dataInicio, dataFim], (err, rows) => {
+        if (err) {
+            console.error(err);
+            return res.status(500).json({ message: "Erro ao buscar movimentos do mês." });
+        }
+
+        res.json(rows);
+    });
+});
+
+// Rota para obter estatísticas mensais (CORRIGIDA)
+app.get("/movimento/mes/estatisticas", (req, res) => {
+    const { codigo, mes, ano } = req.query;
+
+    if (!codigo || !mes || !ano) {
+        return res.status(400).json({ message: "Código, mês e ano são obrigatórios." });
+    }
+
+    // Construir a data inicial e final do mês
+    const dataInicio = `${ano}-${mes.padStart(2, '0')}-01`;
+    const ultimoDia = new Date(ano, mes, 0).getDate();
+    const dataFim = `${ano}-${mes.padStart(2, '0')}-${ultimoDia}`;
+
+    const query = `
+        SELECT 
+            COUNT(DISTINCT data) as total_dias,
+            AVG(
+                ((CAST(SUBSTR(horarioS, 1, 2) AS INTEGER) * 60 + CAST(SUBSTR(horarioS, 4, 2) AS INTEGER)) -
+                (CAST(SUBSTR(horarioE, 1, 2) AS INTEGER) * 60 + CAST(SUBSTR(horarioE, 4, 2) AS INTEGER)))
+            ) as media_minutos
+        FROM movimento 
+        WHERE codigo = ? 
+        AND date(data) BETWEEN ? AND ?
+        AND horarioS IS NOT NULL
+        AND horarioE IS NOT NULL
+    `;
+
+    db.get(query, [codigo, dataInicio, dataFim], (err, row) => {
+        if (err) {
+            console.error(err);
+            return res.status(500).json({ message: "Erro ao calcular estatísticas." });
+        }
+
+        res.json({
+            total_dias: row.total_dias || 0,
+            media_minutos: Math.round(row.media_minutos) || 0
+        });
+    });
+});
+
+// Rota para exportar dados de movimento em CSV
+app.get("/movimento/mes/exportar", (req, res) => {
+    const { codigo, mes, ano } = req.query;
+
+    if (!codigo || !mes || !ano) {
+        return res.status(400).json({ message: "Código, mês e ano são obrigatórios." });
+    }
+
+    // Buscar dados do cliente
+    const queryCliente = `SELECT nome FROM clientes WHERE codigo = ?`;
+    db.get(queryCliente, [codigo], (err, cliente) => {
+        if (err) {
+            console.error(err);
+            return res.status(500).json({ message: "Erro ao buscar dados do cliente." });
+        }
+
+        if (!cliente) {
+            return res.status(404).json({ message: "Cliente não encontrado." });
+        }
+
+        // Buscar movimentos do mês
+        const dataInicio = `${ano}-${mes.padStart(2, '0')}-01`;
+        const ultimoDia = new Date(ano, mes, 0).getDate();
+        const dataFim = `${ano}-${mes.padStart(2, '0')}-${ultimoDia}`;
+
+        const queryMovimentos = `
+            SELECT * FROM movimento 
+            WHERE codigo = ? 
+            AND date(data) BETWEEN ? AND ?
+            ORDER BY data, horarioE
+        `;
+
+        db.all(queryMovimentos, [codigo, dataInicio, dataFim], (err, rows) => {
+            if (err) {
+                console.error(err);
+                return res.status(500).json({ message: "Erro ao buscar movimentos." });
+            }
+
+            // Gerar CSV
+            let csv = `Cliente: ${cliente.nome}\n`;
+            csv += `Mês/Ano: ${mes}/${ano}\n\n`;
+            csv += "Data,Entrada,Saída,Tempo Permanência\n";
+
+            rows.forEach(mov => {
+                try {
+                    const dataFormatada = mov.data.split('-').reverse().join('/');
+                    const entrada = mov.horarioE;
+                    const saida = mov.horarioS;
+
+                    // Calcular tempo de permanência
+                    const [hEntrada, mEntrada] = entrada.split(':').map(Number);
+                    const [hSaida, mSaida] = saida.split(':').map(Number);
+                    const minutosEntrada = hEntrada * 60 + mEntrada;
+                    const minutosSaida = hSaida * 60 + mSaida;
+                    const diferencaMinutos = minutosSaida - minutosEntrada;
+                    const horas = Math.floor(diferencaMinutos / 60);
+                    const minutos = diferencaMinutos % 60;
+                    const tempoPermanencia = `${horas}h${minutos.toString().padStart(2, '0')}`;
+
+                    csv += `${dataFormatada},${entrada},${saida},${tempoPermanencia}\n`;
+                } catch (error) {
+                    console.error("Erro ao processar movimento:", mov, error);
+                }
+            });
+
+            // Configurar headers para download
+            res.setHeader('Content-Type', 'text/csv');
+            res.setHeader('Content-Disposition', `attachment; filename=movimento_${codigo}_${mes}_${ano}.csv`);
+            res.send(csv);
+        });
+    });
+});
+
+// REMOVA a rota duplicada /clientes/co
