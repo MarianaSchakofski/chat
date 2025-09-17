@@ -1,79 +1,100 @@
-let codigoClienteAtual = null;
+async function Pesquisar() {
+    const searchTerm = document.getElementById('search').value.trim();
 
-async function pesquisarMovimento() {
-    const codigo = document.getElementById('pesquisa-codigo').value.trim();
-
-    if (!codigo) {
-        alert('Por favor, digite um código de cliente.');
+    if (!searchTerm) {
+        alert('Por favor, digite um código, nome ou CPF para pesquisar');
         return;
     }
-
-    const mes = document.getElementById('selecionar-mes').value;
-    const ano = document.getElementById('selecionar-ano').value;
 
     try {
-        // Buscar dados do cliente
-        const responseCliente = await fetch(`/clientes/codigo/${codigo}`);
-        if (!responseCliente.ok) {
-            throw new Error('Cliente não encontrado');
+        // Buscar informações completas do movimento
+        const response = await fetch(`/movimento/completo?search=${encodeURIComponent(searchTerm)}`);
+        
+        if (!response.ok) {
+            throw new Error('Erro na resposta da rede');
         }
-        const cliente = await responseCliente.json();
+        
+        const dados = await response.json();
 
-        // Exibir informações do cliente
-        document.getElementById('cliente-nome').textContent = cliente.nome;
-        document.getElementById('info-cliente').style.display = 'block';
+        const resultContainer = document.getElementById('result-container');
+        resultContainer.style.display = 'block';
+        resultContainer.innerHTML = '';
 
-        // Buscar movimentos
-        const responseMovimentos = await fetch(`/movimento/mes?codigo=${codigo}&mes=${mes}&ano=${ano}`);
-        if (!responseMovimentos.ok) {
-            throw new Error('Erro ao buscar movimentos');
+        if (dados.length === 0) {
+            resultContainer.innerHTML = '<div class="caixa-resposta"><p>Nenhum cliente encontrado.</p></div>';
+            return;
         }
-        const movimentos = await responseMovimentos.json();
 
-        codigoClienteAtual = codigo;
-        preencherTabelaMovimentos(movimentos);
+        // Para cada cliente encontrado, mostra as informações
+        dados.forEach(cliente => {
+            const caixa = document.createElement('div');
+            caixa.className = 'caixa-resposta';
+
+            caixa.innerHTML = `
+                <h3>${cliente.nome} (Código: ${cliente.codigo})</h3>
+                <div class="cliente-info">
+                    <div class="info-group">
+                        <span class="info-label">CPF:</span> ${cliente.cpf || 'N/A'}
+                    </div>
+                    <div class="info-group">
+                        <span class="info-label">Idade:</span> ${cliente.idade || 'N/A'}
+                    </div>
+                    <div class="info-group">
+                        <span class="info-label">Telefone:</span> ${cliente.telefone || 'N/A'}
+                    </div>
+                    <div class="info-group">
+                        <span class="info-label">Email:</span> ${cliente.email || 'N/A'}
+                    </div>
+                    <div class="info-group">
+                        <span class="info-label">Endereço:</span> ${cliente.endereco || 'N/A'}
+                    </div>
+                    <div class="info-group">
+                        <span class="info-label">Mês:</span> ${cliente.mes || 'N/A'}
+                    </div>
+                    <div class="info-group">
+                        <span class="info-label">Treinos:</span> ${cliente.treinos || '0'}
+                    </div>
+                    <div class="info-group">
+                        <span class="info-label">Faltas:</span> ${cliente.faltas || '0'}
+                    </div>
+                    <div class="info-group">
+                        <span class="info-label">Valor:</span> R$ ${cliente.valor || '0,00'}
+                    </div>
+                    <div class="info-group">
+                        <span class="info-label">Pago:</span> ${cliente.pago || 'Não'}
+                    </div>
+                </div>
+            `;
+
+            resultContainer.appendChild(caixa);
+        });
 
     } catch (error) {
-        alert('Erro: ' + error.message);
-        console.error(error);
+        console.error('Erro na pesquisa:', error);
+        alert('Erro ao realizar a pesquisa. Verifique a conexão.');
     }
 }
 
-function preencherTabelaMovimentos(movimentos) {
-    const tabela = document.getElementById('tabela-movimento-mes');
-    tabela.innerHTML = '';
-
-    if (movimentos.length === 0) {
-        tabela.innerHTML = '<tr><td colspan="3">Nenhum movimento encontrado</td></tr>';
-        document.getElementById('resumo-mensal').style.display = 'none';
-        return;
-    }
-
-    movimentos.forEach(mov => {
-        const linha = document.createElement('tr');
-        linha.innerHTML = `
-            <td>${formatarData(mov.data)}</td>
-            <td>${mov.horarioE}</td>
-            <td>${mov.horarioS || '-'}</td>
-        `;
-        tabela.appendChild(linha);
-    });
-
-    document.getElementById('total-dias').textContent = movimentos.length;
-    document.getElementById('resumo-mensal').style.display = 'block';
+function voltarpagina() {
+    window.location.href = 'escolha.html';
 }
 
-function formatarData(dataString) {
-    const data = new Date(dataString);
-    return data.toLocaleDateString('pt-BR');
+function limpaFormulario() {
+    document.getElementById('search').value = '';
+    const resultContainer = document.getElementById('result-container');
+    resultContainer.style.display = 'none';
+    resultContainer.innerHTML = '';
 }
 
-function voltarParaCadastro() {
-    window.location.href = 'cadastro.html';
-}
-
-// Inicialização
+// Adicionar evento de enter no campo de pesquisa
 document.addEventListener('DOMContentLoaded', function() {
-    const mesAtual = new Date().getMonth() + 1;
-    document.getElementById('selecionar-mes').value = mesAtual;
+    const searchInput = document.getElementById('search');
+    if (searchInput) {
+        searchInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                Pesquisar();
+            }
+        });
+    }
 });
