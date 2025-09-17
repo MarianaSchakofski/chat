@@ -1,0 +1,132 @@
+// index.js - Rota corrigida
+app.get("/movimento/completo", (req, res) => {
+    const search = req.query.search || "";
+
+    if (!search) {
+        return res.status(400).json({ message: "Termo de pesquisa é obrigatório." });
+    }
+
+    const query = `
+        SELECT 
+            c.codigo, 
+            c.nome, 
+            c.idade, 
+            c.telefone, 
+            c.email,
+            c.cpf,
+            c.endereco,
+            c.emergencia,
+            m.mes,
+            m.treinos,
+            m.faltas,
+            m.valor,
+            m.pago
+        FROM clientes c
+        LEFT JOIN movimento m ON c.codigo = m.codigo
+        WHERE c.codigo LIKE ? OR c.nome LIKE ? OR c.cpf LIKE ?
+        ORDER BY c.nome, m.mes DESC
+    `;
+
+    const searchParam = `%${search}%`;
+    
+    db.all(query, [searchParam, searchParam, searchParam], (err, rows) => {
+        if (err) {
+            console.error("Erro na consulta:", err);
+            return res.status(500).json({ message: "Erro ao buscar movimento.", error: err.message });
+        }
+        
+        console.log("Resultados encontrados:", rows.length);
+        res.json(rows);
+    });
+});
+
+
+
+
+
+async function Pesquisar() {
+    const searchTerm = document.getElementById('search').value.trim();
+
+    if (!searchTerm) {
+        alert('Por favor, digite um código, nome ou CPF para pesquisar');
+        return;
+    }
+
+    try {
+        console.log("Buscando por:", searchTerm);
+        
+        // Buscar informações completas do movimento
+        const response = await fetch(`/movimento/completo?search=${encodeURIComponent(searchTerm)}`);
+        
+        console.log("Status da resposta:", response.status);
+        
+        if (!response.ok) {
+            throw new Error(`Erro na resposta: ${response.status}`);
+        }
+        
+        const dados = await response.json();
+        console.log("Dados recebidos:", dados);
+
+        const resultContainer = document.getElementById('result-container');
+        resultContainer.style.display = 'block';
+        resultContainer.innerHTML = '';
+
+        if (dados.length === 0) {
+            resultContainer.innerHTML = '<div class="caixa-resposta"><p>Nenhum cliente encontrado.</p></div>';
+            return;
+        }
+
+        // Para cada cliente encontrado, mostra as informações
+        dados.forEach(cliente => {
+            const caixa = document.createElement('div');
+            caixa.className = 'caixa-resposta';
+
+            caixa.innerHTML = `
+                <h3>${cliente.nome} (Código: ${cliente.codigo})</h3>
+                <div class="cliente-info">
+                    <div class="info-group">
+                        <span class="info-label">CPF:</span> ${cliente.cpf || 'N/A'}
+                    </div>
+                    <div class="info-group">
+                        <span class="info-label">Idade:</span> ${cliente.idade || 'N/A'}
+                    </div>
+                    <div class="info-group">
+                        <span class="info-label">Telefone:</span> ${cliente.telefone || 'N/A'}
+                    </div>
+                    <div class="info-group">
+                        <span class="info-label">Email:</span> ${cliente.email || 'N/A'}
+                    </div>
+                    <div class="info-group">
+                        <span class="info-label">Emergência:</span> ${cliente.emergencia || 'N/A'}
+                    </div>
+                    <div class="info-group">
+                        <span class="info-label">Endereço:</span> ${cliente.endereco || 'N/A'}
+                    </div>
+                    <div class="info-group">
+                        <span class="info-label">Mês:</span> ${cliente.mes || 'N/A'}
+                    </div>
+                    <div class="info-group">
+                        <span class="info-label">Treinos:</span> ${cliente.treinos || '0'}
+                    </div>
+                    <div class="info-group">
+                        <span class="info-label">Faltas:</span> ${cliente.faltas || '0'}
+                    </div>
+                    <div class="info-group">
+                        <span class="info-label">Valor:</span> R$ ${cliente.valor || '0,00'}
+                    </div>
+                    <div class="info-group">
+                        <span class="info-label">Pago:</span> ${cliente.pago || 'Não'}
+                    </div>
+                </div>
+            `;
+
+            resultContainer.appendChild(caixa);
+        });
+
+    } catch (error) {
+        console.error('Erro na pesquisa:', error);
+        alert('Erro ao realizar a pesquisa: ' + error.message);
+    }
+}
+
+// Restante do código permanece igual...
