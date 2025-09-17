@@ -1,61 +1,53 @@
-db.run(`
-        CREATE TABLE IF NOT EXISTS movimento (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            codigo VARCHAR(10) NOT NULL,
-            horarioE VARCHAR(100) NOT NULL,
-            horarioS VARCHAR(100),
-            data DATE DEFAULT CURRENT_DATE
-        )
-    `);
+// Configurações iniciais do Express e SQLite...
 
+// Rotas para Movimento
+app.get("/movimento/completo", (req, res) => {
+    const search = req.query.search || "";
 
-
-
-
-// ==============================================
-// ROTAS PARA MOVIMENTO DO MÊS
-// ==============================================
-
-
-// Buscar cliente por código
-app.get("/clientes/codigo/:codigo", (req, res) => {
-    const { codigo } = req.params;
-    const query = `SELECT * FROM clientes WHERE codigo = ?`;
-
-    db.get(query, [codigo], (err, row) => {
-        if (err) {
-            return res.status(500).json({ message: "Erro ao buscar cliente." });
-        }
-        if (!row) {
-            return res.status(404).json({ message: "Cliente não encontrado." });
-        }
-        res.json(row);
-    });
-});
-
-// Buscar movimentos do mês
-app.get("/movimento/mes", (req, res) => {
-    const { codigo, mes, ano } = req.query;
-
-    if (!codigo || !mes || !ano) {
-        return res.status(400).json({ message: "Código, mês e ano são obrigatórios." });
+    if (!search) {
+        return res.status(400).json({ message: "Termo de pesquisa é obrigatório." });
     }
 
-    const dataInicio = `${ano}-${mes.padStart(2, '0')}-01`;
-    const ultimoDia = new Date(ano, mes, 0).getDate();
-    const dataFim = `${ano}-${mes.padStart(2, '0')}-${ultimoDia}`;
-
     const query = `
-        SELECT * FROM movimento 
-        WHERE codigo = ? 
-        AND date(data) BETWEEN ? AND ?
-        ORDER BY data, horarioE
+        SELECT 
+            c.codigo, 
+            c.nome, 
+            c.idade, 
+            c.telefone, 
+            c.email,
+            c.cpf,
+            c.endereco,
+            c.emergencia,
+            m.mes,
+            m.treinos,
+            m.faltas,
+            m.valor,
+            m.pago
+        FROM clientes c
+        LEFT JOIN movimento m ON c.codigo = m.codigo
+        WHERE c.codigo LIKE ? OR c.nome LIKE ? OR c.cpf LIKE ?
+        ORDER BY c.nome, m.mes DESC
     `;
 
-    db.all(query, [codigo, dataInicio, dataFim], (err, rows) => {
+    const searchParam = `%${search}%`;
+    db.all(query, [searchParam, searchParam, searchParam], (err, rows) => {
         if (err) {
-            return res.status(500).json({ message: "Erro ao buscar movimentos." });
+            console.error(err);
+            return res.status(500).json({ message: "Erro ao buscar movimento." });
         }
         res.json(rows);
     });
+});
+
+// Suas outras rotas para movimento...
+app.post("/movimento", (req, res) => {
+    // Sua implementação existente
+});
+
+app.get("/movimento", (req, res) => {
+    // Sua implementação existente
+});
+
+app.put("/movimento/codigo/:codigo/mes/:mes", (req, res) => {
+    // Sua implementação existente
 });
